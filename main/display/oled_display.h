@@ -5,6 +5,15 @@
 
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
+#include <mutex>
+
+// 内存优化级别枚举
+enum class MemoryOptimizationLevel {
+    NONE,   // 不进行内存优化
+    LOW,    // 低级别内存优化
+    MEDIUM, // 中级内存优化
+    HIGH    // 高级内存优化
+};
 
 class OledDisplay : public Display {
 private:
@@ -19,6 +28,19 @@ private:
     lv_obj_t* side_bar_ = nullptr;
 
     DisplayFonts fonts_;
+    
+    // 内存优化相关属性
+    MemoryOptimizationLevel memory_optimization_level_ = MemoryOptimizationLevel::NONE;
+    bool animations_enabled_ = true;
+    bool simplified_emotion_mode_ = false;
+    bool display_locked_ = false;
+    
+    // 添加缺失的成员变量
+    bool locked_ = false;         // 显示锁定状态
+    uint8_t refresh_counter_ = 0; // 刷新计数器
+    uint8_t refresh_rate_ = 1;    // 刷新率
+    bool dirty_ = false;          // 脏标记，表示内容需要刷新
+    mutable std::mutex mutex_;    // 互斥锁，用于线程安全访问
 
     virtual bool Lock(int timeout_ms = 0) override;
     virtual void Unlock() override;
@@ -32,6 +54,15 @@ public:
     ~OledDisplay();
 
     virtual void SetChatMessage(const char* role, const char* content) override;
+    
+    // 新增方法
+    void Refresh();
+    void SetRefreshRate(uint8_t rate);
+    void EnableAnimations(bool enable);
+    void SetSimplifiedEmotionMode(bool simplified);
+    void SetMemoryOptimizationLevel(MemoryOptimizationLevel level);
+    bool IsDisplayLocked() const;
+    virtual void SetEmotion(const char* emotion) override;
 };
 
 #endif // OLED_DISPLAY_H

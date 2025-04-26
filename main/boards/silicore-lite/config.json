@@ -1,0 +1,25 @@
+{
+    "target": "esp32c3",
+    "builds": [
+        {
+            "name": "silicore-lite",
+            "sdkconfig_append": [
+                "CONFIG_PM_ENABLE=y",
+                "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y"
+            ],
+            "sdkconfig_defaults": [
+                "main/boards/silicore-lite/sdkconfig.defaults"
+            ]
+        },
+        {
+            "name": "silicore-lite-ml307",
+            "sdkconfig_append": [
+                "CONFIG_PM_ENABLE=y",
+                "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y"
+            ],
+            "sdkconfig_defaults": [
+                "main/boards/silicore-lite/sdkconfig.defaults"
+            ]
+        }
+    ]
+} 

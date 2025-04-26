@@ -1,4 +1,4 @@
-#include "sillycon_lite_c3_oled.h"
+#include "silicore_lite_c3_oled.h"
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -6,12 +6,12 @@
 #include <esp_timer.h>
 #include <esp_heap_caps.h>
 
-#define TAG "SillyconLiteC3Oled"
+#define TAG "SilicoreC3Oled"
 
 // Memory-optimized OLED for ESP32-C3
-SillyconLiteC3Oled::SillyconLiteC3Oled(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, 
-                                      int width, int height, bool mirror_x, bool mirror_y,
-                                      DisplayFonts fonts)
+SilicoreC3Oled::SilicoreC3Oled(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, 
+                                int width, int height, bool mirror_x, bool mirror_y,
+                                DisplayFonts fonts)
     : OledDisplay(panel_io, panel, width, height, mirror_x, mirror_y, fonts) {
     
     // Apply C3-specific memory optimizations immediately
