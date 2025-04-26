@@ -1,4 +1,4 @@
-#include "wifi_board.h"
+#include "ml307_board.h"
 #include "audio_codecs/es8311_audio_codec.h"
 #include "display/oled_display.h"
 #include "application.h"
@@ -11,7 +11,6 @@
 #include "font_awesome_symbols.h"
 #include "silicore_lite_c3_oled.h"
 
-#include <wifi_station.h>
 #include <esp_log.h>
 #include <esp_efuse_table.h>
 #include <driver/i2c_master.h>
@@ -26,7 +25,7 @@ LV_FONT_DECLARE(font_awesome_14_1);
 
 #if defined(USE_ML307_BOARD)
 
-class SilicoreLiteML307Board : public WifiBoard {
+class SilicoreLiteML307Board : public Ml307Board {
 private:
     i2c_master_bus_handle_t codec_i2c_bus_;
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
@@ -126,9 +125,6 @@ private:
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting && !WifiStation::GetInstance().IsConnected()) {
-                ResetWifiConfiguration();
-            }
             if (!press_to_talk_enabled_) {
                 app.ToggleChatState();
             }
@@ -157,7 +153,7 @@ private:
     }
 
 public:
-    SilicoreLiteML307Board() : boot_button_(BOOT_BUTTON_GPIO) {  
+    SilicoreLiteML307Board() : Ml307Board(ML307_TX_PIN, ML307_RX_PIN, 4096), boot_button_(BOOT_BUTTON_GPIO) {  
         // 把 ESP32C3 的 VDD SPI 引脚作为普通 GPIO 口使用
         esp_efuse_write_field_bit(ESP_EFUSE_VDD_SPI_AS_GPIO);
 
