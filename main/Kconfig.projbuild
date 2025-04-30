@@ -71,7 +71,7 @@ choice BOARD_TYPE
     config BOARD_TYPE_ESP_BOX
         bool "ESP BOX"
     config BOARD_TYPE_ESP_BOX_LITE
-        bool "ESP BOX Lite"
+        bool "ESP BOX Lite"        
     config BOARD_TYPE_SILICORE_LITE
         bool "硅小宝lite (silicore-lite)"        
     config BOARD_TYPE_SILICORE_LITE_ML307
@@ -261,4 +261,43 @@ config USE_REALTIME_CHAT
     help
         需要 ESP32 S3 与 AEC 开启，因为性能不够，不建议和微信聊天界面风格同时开启
         
+endmenu
+
+menu "Device Configuration"
+    config USE_BATTERY_MONITOR
+        bool "Enable battery monitoring"
+        default y
+        help
+            Enable battery voltage monitoring using ADC and voltage divider.
+            This requires a voltage divider circuit connected to the configured GPIO.
+
+    config BATTERY_MONITOR_GPIO
+        int "Battery monitoring GPIO number"
+        default 0
+        range 0 48
+        depends on USE_BATTERY_MONITOR
+        help
+            GPIO number (IOxx) to use for battery voltage monitoring.
+            This GPIO must be connected to a voltage divider circuit.
+            Some GPIOs are used for other purposes (flash connections, UART, etc.)
+            and cannot be used for ADC.
+
+    config BATTERY_VOLTAGE_DIVIDER_RATIO
+        int "Battery voltage divider ratio (x100)"
+        default 200
+        range 100 1000
+        depends on USE_BATTERY_MONITOR
+        help
+            Voltage divider ratio multiplied by 100.
+            For example, if using 100K + 100K resistors, the ratio is 2.00,
+            so enter 200 here.
+            The actual battery voltage will be the measured voltage times this ratio.
+
+    config BATTERY_UPDATE_INTERVAL
+        int "Battery status update interval (seconds)"
+        default 10
+        range 1 3600
+        depends on USE_BATTERY_MONITOR
+        help
+            How often to update the battery status display (in seconds).
 endmenu

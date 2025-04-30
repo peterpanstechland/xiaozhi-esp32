@@ -7,11 +7,15 @@
 #include <esp_pm.h>
 
 #include <string>
+#include <memory>
+
+class OledDisplay;  // Forward declaration
 
 struct DisplayFonts {
     const lv_font_t* text_font = nullptr;
     const lv_font_t* icon_font = nullptr;
     const lv_font_t* emoji_font = nullptr;
+    const lv_font_t* small_text_font = nullptr;
 };
 
 class Display {
@@ -27,6 +31,7 @@ public:
     virtual void SetIcon(const char* icon);
     virtual void SetTheme(const std::string& theme_name);
     virtual std::string GetTheme() { return current_theme_name_; }
+    virtual void SetNetworkIcon(const char* icon);
 
     inline int width() const { return width_; }
     inline int height() const { return height_; }

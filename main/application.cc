@@ -1,6 +1,7 @@
 #include "application.h"
 #include "board.h"
 #include "display.h"
+#include "display/oled_display.h"
 #include "system_info.h"
 #include "ml307_ssl_transport.h"
 #include "audio_codec.h"
@@ -60,6 +61,10 @@ Application::~Application() {
         delete background_task_;
     }
     vEventGroupDelete(event_group_);
+
+    if (battery_timer_handle_) {
+        esp_timer_delete(battery_timer_handle_);
+    }
 }
 
 void Application::CheckNewVersion() {
@@ -563,6 +568,14 @@ void Application::Start() {
     ResetDecoder();
     PlaySound(Lang::Sounds::P3_SUCCESS);
     
+    // Initialize battery monitor before entering main event loop
+    InitializeBatteryMonitor();
+    if (display && battery_monitor_) {
+        // We know this is an OLED display implementation
+        OledDisplay* oled_display = static_cast<OledDisplay*>(display);
+        oled_display->SetBatteryMonitor(battery_monitor_.get());
+    }
+    
     // Enter the main event loop
     MainEventLoop();
 }
@@ -926,4 +939,87 @@ bool Application::CanEnterSleepMode() {
 
     // Now it is safe to enter sleep mode
     return true;
+}
+
+void Application::InitializeBatteryMonitor() {
+#ifdef CONFIG_USE_BATTERY_MONITOR
+    ESP_LOGI(TAG, "Initializing battery monitor on GPIO%d with divider ratio %.2f", 
+             CONFIG_BATTERY_MONITOR_GPIO, 
+             CONFIG_BATTERY_VOLTAGE_DIVIDER_RATIO / 100.0f);
+
+    // 创建电池监控器实例，使用配置的GPIO和分压比例
+    battery_monitor_ = std::make_unique<BatteryMonitor>(
+        CONFIG_BATTERY_MONITOR_GPIO,                    // 配置的GPIO
+        CONFIG_BATTERY_VOLTAGE_DIVIDER_RATIO / 100.0f   // 配置的分压比例
+    );
+    
+    if (!battery_monitor_->Init()) {
+        ESP_LOGE(TAG, "Failed to initialize battery monitor");
+        battery_monitor_.reset();
+        return;
+    }
+
+    ESP_LOGI(TAG, "Battery monitor initialized successfully");
+
+    // 创建定时器用于定期更新电池状态
+    const esp_timer_create_args_t timer_args = {
+        .callback = [](void* arg) {
+            static_cast<Application*>(arg)->OnBatteryTimer();
+        },
+        .arg = this,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "battery_timer",
+        .skip_unhandled_events = true,
+    };
+
+    esp_err_t err = esp_timer_create(&timer_args, &battery_timer_handle_);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create battery timer: %s", esp_err_to_name(err));
+        battery_monitor_.reset();
+        return;
+    }
+
+    err = esp_timer_start_periodic(battery_timer_handle_, 
+        CONFIG_BATTERY_UPDATE_INTERVAL * 1000000); // 配置的秒数转换为微秒
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start battery timer: %s", esp_err_to_name(err));
+        esp_timer_delete(battery_timer_handle_);
+        battery_timer_handle_ = nullptr;
+        battery_monitor_.reset();
+        return;
+    }
+
+    ESP_LOGI(TAG, "Battery monitor timer started with %d second interval", 
+             CONFIG_BATTERY_UPDATE_INTERVAL);
+
+    // 立即进行一次电池状态更新
+    OnBatteryTimer();
+#else
+    ESP_LOGW(TAG, "Battery monitoring is disabled in config");
+#endif
+}
+
+void Application::OnBatteryTimer() {
+    if (!battery_monitor_) {
+        ESP_LOGW(TAG, "Battery monitor not initialized");
+        return;
+    }
+
+    // Get battery information
+    float voltage = battery_monitor_->GetVoltage();
+    int percentage = battery_monitor_->GetBatteryPercentage();
+    
+    // Log with a more descriptive format
+    ESP_LOGI(TAG, "Battery Status - Voltage: %.2fV | Level: %d%% | State: %s", 
+            voltage, percentage, 
+            percentage > 80 ? "Full" : 
+            percentage > 20 ? "Normal" : 
+            percentage > 10 ? "Low" : "Critical");
+    
+    // Update display if available
+    auto display = Board::GetInstance().GetDisplay();
+    if (display) {
+        OledDisplay* oled_display = static_cast<OledDisplay*>(display);
+        oled_display->UpdateBatteryDisplay();  // 直接调用电池显示更新函数
+    }
 }

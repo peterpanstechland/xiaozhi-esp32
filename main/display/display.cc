@@ -242,11 +242,7 @@ void Display::SetEmotion(const char* emotion) {
 }
 
 void Display::SetIcon(const char* icon) {
-    DisplayLockGuard lock(this);
-    if (emotion_label_ == nullptr) {
-        return;
-    }
-    lv_label_set_text(emotion_label_, icon);
+    // Default implementation does nothing
 }
 
 void Display::SetChatMessage(const char* role, const char* content) {
@@ -255,6 +251,11 @@ void Display::SetChatMessage(const char* role, const char* content) {
         return;
     }
     lv_label_set_text(chat_message_label_, content);
+}
+
+void Display::SetNetworkIcon(const char* icon) {
+    // Store the icon for derived classes to use
+    network_icon_ = icon;
 }
 
 void Display::SetTheme(const std::string& theme_name) {

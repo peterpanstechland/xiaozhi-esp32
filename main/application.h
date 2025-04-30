@@ -27,6 +27,8 @@
 #include "audio_processor.h"
 #endif
 
+#include "battery/battery_monitor.h"
+
 #define SCHEDULE_EVENT (1 << 0)
 #define AUDIO_INPUT_READY_EVENT (1 << 1)
 #define AUDIO_OUTPUT_READY_EVENT (1 << 2)
@@ -117,6 +119,9 @@ private:
     OpusResampler reference_resampler_;
     OpusResampler output_resampler_;
 
+    std::unique_ptr<BatteryMonitor> battery_monitor_;
+    esp_timer_handle_t battery_timer_handle_ = nullptr;
+
     void MainEventLoop();
     void OnAudioInput();
     void OnAudioOutput();
@@ -128,6 +133,8 @@ private:
     void OnClockTimer();
     void SetListeningMode(ListeningMode mode);
     void AudioLoop();
+    void InitializeBatteryMonitor();
+    void OnBatteryTimer();
 };
 
 #endif // _APPLICATION_H_

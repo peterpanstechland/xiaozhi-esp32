@@ -12,6 +12,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>  // For vTaskDelay
 #include <esp_timer.h>
+#include <lvgl.h>  // This includes all LVGL functionality including area operations
 
 #define TAG "OledDisplay"
 
@@ -64,6 +65,13 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
         SetupUI_128x64();
     } else {
         SetupUI_128x32();
+    }
+    
+    // 强制初始化网络图标为信号图标
+    if (network_label_ != nullptr) {
+        network_icon_ = FONT_AWESOME_SIGNAL_1;
+        lv_label_set_text(network_label_, network_icon_);
+        ESP_LOGI(TAG, "Network icon initialized");
     }
 }
 
@@ -229,12 +237,72 @@ void OledDisplay::SetupUI_128x64() {
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_pad_row(container_, 0, 0);
 
-    /* Status bar */
+    /* 状态栏 - 简化版 */
     status_bar_ = lv_obj_create(container_);
     lv_obj_set_size(status_bar_, LV_HOR_RES, 16);
+    lv_obj_set_flex_flow(status_bar_, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_border_width(status_bar_, 0, 0);
-    lv_obj_set_style_pad_all(status_bar_, 0, 0);
     lv_obj_set_style_radius(status_bar_, 0, 0);
+    lv_obj_set_style_pad_all(status_bar_, 0, 0);
+    lv_obj_set_style_pad_column(status_bar_, 2, 0);
+
+    // 添加一个明显的黑色背景块来显示网络图标位置
+    lv_obj_t* network_container = lv_obj_create(status_bar_);
+    lv_obj_set_size(network_container, 16, 16);  // 稍微减小容器尺寸
+    lv_obj_set_style_bg_color(network_container, lv_color_black(), 0);
+    lv_obj_set_style_border_width(network_container, 0, 0);
+
+    // 创建白色网络图标在黑色背景上 - 使用更小的字体大小
+    network_label_ = lv_label_create(network_container);
+    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_color(network_label_, lv_color_white(), 0);
+    // 测试使用不同的图标，确认图标字体正常
+    lv_label_set_text(network_label_, FONT_AWESOME_BATTERY_FULL);  // 使用电池图标来测试
+    lv_obj_set_style_transform_scale(network_label_, 80, 0);  // 缩小图标到80%
+    lv_obj_center(network_label_);
+    network_icon_ = FONT_AWESOME_BATTERY_FULL;  // 保存测试图标
+    ESP_LOGI(TAG, "Network icon changed to battery for testing");
+
+    // 状态文本 (中间)
+    status_label_ = lv_label_create(status_bar_);
+    lv_obj_set_flex_grow(status_label_, 1);
+    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
+    lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
+
+    // 通知标签 (中间，与状态重叠)
+    notification_label_ = lv_label_create(status_bar_);
+    lv_obj_set_flex_grow(notification_label_, 1);
+    lv_label_set_text(notification_label_, "");
+    lv_obj_set_style_text_align(notification_label_, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
+
+    // 静音图标 (右侧)
+    mute_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(mute_label_, "");
+    lv_obj_set_style_text_font(mute_label_, fonts_.icon_font, 0);
+
+    // 电池图标 (最右侧)
+    battery_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(battery_label_, "");
+    lv_obj_set_style_text_font(battery_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_opa(battery_label_, 180, 0);
+
+    // 创建但隐藏百分比标签
+    battery_percentage_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(battery_percentage_label_, "");
+    lv_obj_add_flag(battery_percentage_label_, LV_OBJ_FLAG_HIDDEN);
+
+    low_battery_popup_ = lv_obj_create(screen);
+    lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_size(low_battery_popup_, LV_HOR_RES * 0.9, fonts_.text_font->line_height * 2);
+    lv_obj_align(low_battery_popup_, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(low_battery_popup_, lv_color_black(), 0);
+    lv_obj_set_style_radius(low_battery_popup_, 10, 0);
+    low_battery_label_ = lv_label_create(low_battery_popup_);
+    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
+    lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
+    lv_obj_center(low_battery_label_);
+    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
 
     /* Content */
     content_ = lv_obj_create(container_);
@@ -283,47 +351,12 @@ void OledDisplay::SetupUI_128x64() {
         lv_obj_set_style_anim(chat_message_label_, &a, LV_PART_MAIN);
         lv_obj_set_style_anim_duration(chat_message_label_, lv_anim_speed_clamped(60, 300, 60000), LV_PART_MAIN);
     }
-
-    /* Status bar */
-    lv_obj_set_flex_flow(status_bar_, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_all(status_bar_, 0, 0);
-    lv_obj_set_style_border_width(status_bar_, 0, 0);
-    lv_obj_set_style_pad_column(status_bar_, 0, 0);
-
-    network_label_ = lv_label_create(status_bar_);
-    lv_label_set_text(network_label_, "");
-    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
-
-    notification_label_ = lv_label_create(status_bar_);
-    lv_obj_set_flex_grow(notification_label_, 1);
-    lv_obj_set_style_text_align(notification_label_, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(notification_label_, "");
-    lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
-
-    status_label_ = lv_label_create(status_bar_);
-    lv_obj_set_flex_grow(status_label_, 1);
-    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
-    lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
-
-    mute_label_ = lv_label_create(status_bar_);
-    lv_label_set_text(mute_label_, "");
-    lv_obj_set_style_text_font(mute_label_, fonts_.icon_font, 0);
-
-    battery_label_ = lv_label_create(status_bar_);
-    lv_label_set_text(battery_label_, "");
-    lv_obj_set_style_text_font(battery_label_, fonts_.icon_font, 0);
-
-    low_battery_popup_ = lv_obj_create(screen);
-    lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_size(low_battery_popup_, LV_HOR_RES * 0.9, fonts_.text_font->line_height * 2);
-    lv_obj_align(low_battery_popup_, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_bg_color(low_battery_popup_, lv_color_black(), 0);
-    lv_obj_set_style_radius(low_battery_popup_, 10, 0);
-    low_battery_label_ = lv_label_create(low_battery_popup_);
-    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
-    lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
-    lv_obj_center(low_battery_label_);
-    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
+    
+    // 全屏刷新
+    if (panel_) {
+        esp_lcd_panel_draw_bitmap(panel_, 0, 0, width_, height_, nullptr);
+        ESP_LOGI(TAG, "Full screen refresh after UI setup");
+    }
 }
 
 void OledDisplay::SetupUI_128x32() {
@@ -361,37 +394,72 @@ void OledDisplay::SetupUI_128x32() {
     lv_obj_set_style_radius(side_bar_, 0, 0);
     lv_obj_set_style_pad_row(side_bar_, 0, 0);
 
-    /* Status bar */
+    /* 状态栏 - 简化版 */
     status_bar_ = lv_obj_create(side_bar_);
     lv_obj_set_size(status_bar_, width_ - 32, 16);
-    lv_obj_set_style_radius(status_bar_, 0, 0);
     lv_obj_set_flex_flow(status_bar_, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_all(status_bar_, 0, 0);
     lv_obj_set_style_border_width(status_bar_, 0, 0);
-    lv_obj_set_style_pad_column(status_bar_, 0, 0);
+    lv_obj_set_style_radius(status_bar_, 0, 0);
+    lv_obj_set_style_pad_all(status_bar_, 0, 0);
+    lv_obj_set_style_pad_column(status_bar_, 2, 0);
 
+    // 添加一个明显的黑色背景块来显示网络图标位置
+    lv_obj_t* network_container = lv_obj_create(status_bar_);
+    lv_obj_set_size(network_container, 16, 16);  // 稍微减小容器尺寸
+    lv_obj_set_style_bg_color(network_container, lv_color_black(), 0);
+    lv_obj_set_style_border_width(network_container, 0, 0);
+
+    // 创建白色网络图标在黑色背景上 - 使用更小的字体大小
+    network_label_ = lv_label_create(network_container);
+    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_color(network_label_, lv_color_white(), 0);
+    // 测试使用不同的图标，确认图标字体正常
+    lv_label_set_text(network_label_, FONT_AWESOME_BATTERY_FULL);  // 使用电池图标来测试
+    lv_obj_set_style_transform_scale(network_label_, 80, 0);  // 缩小图标到80%
+    lv_obj_center(network_label_);
+    network_icon_ = FONT_AWESOME_BATTERY_FULL;  // 保存测试图标
+    ESP_LOGI(TAG, "Network icon changed to battery for testing");
+
+    // 状态文本 (中间)
     status_label_ = lv_label_create(status_bar_);
     lv_obj_set_flex_grow(status_label_, 1);
-    lv_obj_set_style_pad_left(status_label_, 2, 0);
     lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
+    lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
 
+    // 通知标签 (中间，与状态重叠)
     notification_label_ = lv_label_create(status_bar_);
     lv_obj_set_flex_grow(notification_label_, 1);
-    lv_obj_set_style_pad_left(notification_label_, 2, 0);
     lv_label_set_text(notification_label_, "");
+    lv_obj_set_style_text_align(notification_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_add_flag(notification_label_, LV_OBJ_FLAG_HIDDEN);
 
+    // 静音图标 (右侧)
     mute_label_ = lv_label_create(status_bar_);
     lv_label_set_text(mute_label_, "");
     lv_obj_set_style_text_font(mute_label_, fonts_.icon_font, 0);
 
-    network_label_ = lv_label_create(status_bar_);
-    lv_label_set_text(network_label_, "");
-    lv_obj_set_style_text_font(network_label_, fonts_.icon_font, 0);
-
+    // 电池图标 (最右侧)
     battery_label_ = lv_label_create(status_bar_);
     lv_label_set_text(battery_label_, "");
     lv_obj_set_style_text_font(battery_label_, fonts_.icon_font, 0);
+    lv_obj_set_style_text_opa(battery_label_, 180, 0);
+
+    // 创建但隐藏百分比标签
+    battery_percentage_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(battery_percentage_label_, "");
+    lv_obj_add_flag(battery_percentage_label_, LV_OBJ_FLAG_HIDDEN);
+
+    low_battery_popup_ = lv_obj_create(screen);
+    lv_obj_set_scrollbar_mode(low_battery_popup_, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_size(low_battery_popup_, LV_HOR_RES * 0.9, fonts_.text_font->line_height * 2);
+    lv_obj_align(low_battery_popup_, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(low_battery_popup_, lv_color_black(), 0);
+    lv_obj_set_style_radius(low_battery_popup_, 10, 0);
+    low_battery_label_ = lv_label_create(low_battery_popup_);
+    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
+    lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
+    lv_obj_center(low_battery_label_);
+    lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
 
     chat_message_label_ = lv_label_create(side_bar_);
     lv_obj_set_size(chat_message_label_, width_ - 32, LV_SIZE_CONTENT);
@@ -408,6 +476,12 @@ void OledDisplay::SetupUI_128x32() {
         lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
         lv_obj_set_style_anim(chat_message_label_, &a, LV_PART_MAIN);
         lv_obj_set_style_anim_duration(chat_message_label_, lv_anim_speed_clamped(60, 300, 60000), LV_PART_MAIN);
+    }
+    
+    // 全屏刷新
+    if (panel_) {
+        esp_lcd_panel_draw_bitmap(panel_, 0, 0, width_, height_, nullptr);
+        ESP_LOGI(TAG, "Full screen refresh after UI setup");
     }
 }
 
@@ -460,6 +534,16 @@ void OledDisplay::Refresh() {
     if (simplified_emotion_mode_ && emotion_label_ != nullptr) {
         // Use simpler icon/animation when in simplified mode
         lv_obj_set_style_opa(emotion_label_, LV_OPA_100, 0);
+    }
+    
+    // 确保网络图标总是可见
+    if (network_label_ != nullptr) {
+        lv_obj_clear_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
+        if (network_icon_ == nullptr || network_icon_[0] == '\0') {
+            lv_label_set_text(network_label_, FONT_AWESOME_SIGNAL_1);
+        } else {
+            lv_label_set_text(network_label_, network_icon_);
+        }
     }
 }
 
@@ -565,5 +649,123 @@ void OledDisplay::SetEmotion(const char* emotion) {
     }
 
     lv_label_set_text(emotion_label_, icon);
+}
+
+void OledDisplay::SetBatteryMonitor(BatteryMonitor* monitor) {
+    battery_monitor_ = monitor;
+    if (battery_monitor_) {
+        // 确保电池标签已经创建（在 SetupUI 中创建）
+        if (battery_label_) {
+            UpdateBatteryDisplay();
+        }
+    }
+}
+
+void OledDisplay::UpdateBatteryDisplay() {
+    if (!battery_monitor_ || !battery_label_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    int percentage = battery_monitor_->GetBatteryPercentage();
+    
+    // 根据电量选择显示图标
+    const char* battery_icon;
+    if (percentage >= 80) {
+        battery_icon = FONT_AWESOME_BATTERY_FULL;
+    } else if (percentage >= 60) {
+        battery_icon = FONT_AWESOME_BATTERY_3;
+    } else if (percentage >= 40) {
+        battery_icon = FONT_AWESOME_BATTERY_2;
+    } else if (percentage >= 20) {
+        battery_icon = FONT_AWESOME_BATTERY_1;
+    } else {
+        battery_icon = FONT_AWESOME_BATTERY_EMPTY;
+    }
+    
+    // 只更新图标，不显示百分比
+    lv_label_set_text(battery_label_, battery_icon);
+    
+    // 如果百分比标签存在，将其隐藏起来而不仅是设置为空字符串
+    if (battery_percentage_label_) {
+        lv_obj_add_flag(battery_percentage_label_, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // 确保网络图标显示并正确定位
+    if (network_label_ != nullptr) {
+        // 如果网络图标为空，设置默认图标
+        if (network_icon_ == nullptr || strlen(network_icon_) == 0) {
+            network_icon_ = FONT_AWESOME_SIGNAL_1;
+        }
+        
+        // 更新网络图标文本
+        lv_label_set_text(network_label_, network_icon_);
+        
+        // 确保网络图标可见
+        lv_obj_clear_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
+        
+        // 获取网络图标的坐标并强制刷新该区域
+        lv_area_t network_area;
+        lv_obj_get_coords(network_label_, &network_area);
+        
+        // 扩大刷新区域，确保完全覆盖
+        network_area.x1 -= 1;
+        network_area.y1 -= 1;
+        network_area.x2 += 1;
+        network_area.y2 += 1;
+        
+        // 局部刷新网络图标区域
+        if (panel_) {
+            esp_lcd_panel_draw_bitmap(panel_, network_area.x1, network_area.y1,
+                                  network_area.x2 + 1, network_area.y2 + 1,
+                                  nullptr);  // 让 LVGL 处理实际的绘制
+        }
+    }
+
+    // 获取电池显示区域的坐标
+    lv_area_t battery_area;
+    lv_obj_get_coords(battery_label_, &battery_area);
+
+    // 扩大刷新区域，确保完全覆盖
+    battery_area.x1 -= 1;
+    battery_area.y1 -= 1;
+    battery_area.x2 += 1;
+    battery_area.y2 += 1;
+
+    // 局部刷新显示 - 只刷新电池图标区域
+    if (panel_) {
+        esp_lcd_panel_draw_bitmap(panel_, battery_area.x1, battery_area.y1,
+                              battery_area.x2 + 1, battery_area.y2 + 1,
+                              nullptr);  // 让 LVGL 处理实际的绘制
+    }
+}
+
+void OledDisplay::SetNetworkIcon(const char* icon) {
+    DisplayLockGuard lock(this);
+    if (network_label_ == nullptr) {
+        ESP_LOGE(TAG, "Network label is null in SetNetworkIcon");
+        return;
+    }
+    
+    // 保存图标指针
+    network_icon_ = icon;
+    
+    // 如果图标为空，使用默认图标 - 改为电池图标测试
+    if (icon == nullptr || icon[0] == '\0') {
+        network_icon_ = FONT_AWESOME_BATTERY_FULL;
+    }
+    
+    ESP_LOGI(TAG, "Setting network icon to: %s", network_icon_);
+    
+    // 设置图标文本
+    lv_label_set_text(network_label_, network_icon_);
+    
+    // 确保图标可见
+    lv_obj_clear_flag(network_label_, LV_OBJ_FLAG_HIDDEN);
+    
+    // 全屏刷新确保所有元素可见
+    if (panel_) {
+        esp_lcd_panel_draw_bitmap(panel_, 0, 0, width_, height_, nullptr);
+    }
 }
 

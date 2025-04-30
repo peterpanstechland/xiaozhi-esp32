@@ -2,17 +2,18 @@
 #define OLED_DISPLAY_H
 
 #include "display.h"
-
+#include "../battery/battery_monitor.h"
+#include <lvgl.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <mutex>
 
 // 内存优化级别枚举
 enum class MemoryOptimizationLevel {
-    NONE,   // 不进行内存优化
-    LOW,    // 低级别内存优化
-    MEDIUM, // 中级内存优化
-    HIGH    // 高级内存优化
+    NONE = 0,   // No optimization
+    LOW = 1,    // Low optimization
+    MEDIUM = 2, // Medium optimization
+    HIGH = 3    // High optimization
 };
 
 class OledDisplay : public Display {
@@ -26,8 +27,17 @@ private:
     lv_obj_t* content_right_ = nullptr;
     lv_obj_t* container_ = nullptr;
     lv_obj_t* side_bar_ = nullptr;
+    lv_obj_t* battery_label_ = nullptr;  // 电池图标标签
+    lv_obj_t* battery_percentage_label_ = nullptr;  // 电池百分比标签
+    lv_obj_t* mute_label_ = nullptr;
+    lv_obj_t* low_battery_popup_ = nullptr;
+    lv_obj_t* low_battery_label_ = nullptr;
 
     DisplayFonts fonts_;
+    BatteryMonitor* battery_monitor_ = nullptr;  // 新增：电池监控对象
+    
+    // 图标状态变量
+    const char* network_icon_ = nullptr;  // 网络图标当前状态
     
     // 内存优化相关属性
     MemoryOptimizationLevel memory_optimization_level_ = MemoryOptimizationLevel::NONE;
@@ -53,6 +63,8 @@ public:
                 DisplayFonts fonts);
     ~OledDisplay();
 
+    void UpdateBatteryDisplay();  // Moved to public section for access from Application
+    void SetBatteryMonitor(BatteryMonitor* monitor);
     virtual void SetChatMessage(const char* role, const char* content) override;
     
     // 新增方法
@@ -63,6 +75,7 @@ public:
     void SetMemoryOptimizationLevel(MemoryOptimizationLevel level);
     bool IsDisplayLocked() const;
     virtual void SetEmotion(const char* emotion) override;
+    virtual void SetNetworkIcon(const char* icon) override;
 };
 
 #endif // OLED_DISPLAY_H
